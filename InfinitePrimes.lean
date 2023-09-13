@@ -343,9 +343,7 @@ theorem descend_factors
     (factor : p * q = c * n) : (p / d) * q = (c / d) * n := by
   rw [factors_of_dvd div_p, factors_of_dvd div_c] at factor
   repeat rw [Nat.mul_assoc] at factor
-  have : (p / d) * q = (c / d) * n :=
-    Nat.eq_of_mul_eq_mul_left d_pos factor
-  assumption
+  exact Nat.eq_of_mul_eq_mul_left d_pos factor
 
 theorem pos_of_div : 0 < d ∧ d ≤ n → 1 ≤ n / d :=
   fun _ =>
@@ -397,31 +395,6 @@ def decPrimeTo (n q : Nat) : Decidable (n ⊹ q) :=
 
 instance : Decidable (PrimeTo n q) :=
   decPrimeTo n q
-
-theorem PrimeTo_ascend
-    (reg_q : Reg q) (new_div : q ∤ n)
-    (prime_to : PrimeTo n (q - 1)) : PrimeTo n q := by
-  unfold PrimeTo
-  rw [if_pos]
-  exact And.intro new_div prime_to
-  apply reg_q
-
-theorem PrimeTo_descend (k_le_l : k ≤ l) (reg_k : Reg k) 
-    (ndiv: n ⊹ l) : (n ⊹ k) :=
-  have reg_l := reg_monotone reg_k k_le_l
-  if h : k = l then
-    h ▸ ndiv
-  else by
-    unfold PrimeTo at ndiv
-    simp only [reg_l] at ndiv
-    let ⟨_, ndiv_rest⟩ := ndiv
-    exact
-      have k_lt_l := Nat.lt_of_le_of_ne k_le_l h
-      have : (l - 1) + 1 = l :=
-        Nat.succ_pred <| nz_of_pos <| pos_of_reg reg_l
-      have : k ≤ l - 1 :=
-        Nat.le_of_lt_succ <| this ▸ k_lt_l
-      PrimeTo_descend this reg_k ndiv_rest
 
 theorem not_dvd_of_prime_to
     (reg_k : Reg k) (k_le_m : k ≤ m) (ndiv : n ⊹ m) : k ∤ n :=
