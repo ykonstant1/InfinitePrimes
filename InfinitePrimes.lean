@@ -19,6 +19,54 @@ def Prime (k : Nat) :=
 def NatPrime (k : Nat) :=
   Reg k ∧ ∀ m, 2 ≤ m ∧ m < k → (m ∤ k)
 
+theorem eq_of_le_of_not_lt {a b : Nat}
+    (a_le_b : a ≤ b) (not_a_lt_b : ¬ a < b) : a = b :=
+  Nat.le_antisymm a_le_b (Nat.ge_of_not_lt not_a_lt_b)
+
+theorem eq_of_lt_succ_of_not_lt {a b : Nat}
+    (a_lt_succ_b : a < b + 1) (not_a_lt_b : ¬ a < b) : a = b :=
+  Nat.le_antisymm
+    (Nat.le_of_lt_succ a_lt_succ_b)
+    (Nat.ge_of_not_lt not_a_lt_b)
+
+def decidableForallInGenRange (p : Nat → Prop) [DecidablePred p] (b n : Nat)
+     : Decidable (∀ k, b ≤ k ∧ k < n → p k) :=
+  if b_ge_n : n ≤ b then
+    isTrue <| fun k ⟨lower, upper⟩ => False.elim <| Nat.lt_irrefl n <| calc
+    n ≤ b := b_ge_n
+    _ ≤ k := lower
+    _ < n := upper 
+  else
+    have b_lt_n : b < n :=
+      Nat.gt_of_not_le b_ge_n
+    let m := n - 1
+    have succ_m : n = m + 1 :=
+      Nat.not_eq_zero_of_lt b_lt_n |> Nat.succ_pred |>.symm
+    have b_le_m : b ≤ m := Nat.le_of_lt_succ <|
+      Nat.succ_eq_add_one m ▸ succ_m ▸ b_lt_n
+    match decidableForallInGenRange p b m with
+    | isFalse not_forall_to_m => isFalse <|
+      fun forall_to_succ_m =>
+      have forall_to_m : ∀ k, b ≤ k ∧ k < m → p k :=
+        fun k ⟨b_le_k, k_lt_m⟩ =>
+        have : k < m + 1 :=
+          Nat.lt_trans k_lt_m (Nat.lt_succ_self m)
+        forall_to_succ_m k ⟨b_le_k, succ_m ▸ this⟩
+      not_forall_to_m forall_to_m
+    | isTrue forall_to_m =>
+      if p_m : p m then
+        isTrue  <| fun k ⟨b_le_k, k_lt_succ_m⟩ =>
+          if k_lt_m : k < m then
+            forall_to_m k ⟨b_le_k, k_lt_m⟩
+          else
+            have : k = m :=
+              eq_of_lt_succ_of_not_lt
+                (succ_m ▸ k_lt_succ_m) k_lt_m
+            this ▸ p_m
+      else
+        isFalse <| fun forall_to_succ_m =>
+          p_m <| forall_to_succ_m m ⟨b_le_m, succ_m ▸ Nat.lt_succ_self m⟩
+
 theorem double_neg_elim [Decidable p] : (¬ (¬ p)) → p :=
   if hp : p then fun _ => hp else (. hp |>.elim)
 
@@ -30,10 +78,6 @@ theorem or_of_right (or_pred: q ∨ p) (proof : p → q) : q :=
 
 notation orp " >l " pr => or_of_left orp pr
 notation orp " >r " pr => or_of_right orp pr
-
-theorem eq_of_le_of_not_lt {a b : Nat}
-    (a_le_b : a ≤ b) (not_a_lt_b : ¬ a < b) : a = b :=
-  Nat.le_antisymm a_le_b (Nat.ge_of_not_lt not_a_lt_b)
 
 def minSatRec
     [DecidablePred p] (r : Nat) (r_le_n : r ≤ n)
@@ -58,7 +102,7 @@ def minSatRec
     ⟨n, sat, this ▸ sofar⟩
 termination_by _ => n - r
 
-theorem minimal_satisfies {n : Nat} [DecidablePred p] (sat : p n) :
+def minimal_satisfies {n : Nat} [DecidablePred p] (sat : p n) :
     ∃ m, p m ∧ (∀ k, k < m → ¬ p k) := 
   minSatRec 0 (Nat.zero_le n) sat (Nat.not_lt_zero . . |>.elim)  
 
@@ -269,6 +313,15 @@ def decDiv (n m : Nat) : Decidable (divides n m) :=
 instance : Decidable (divides n m) :=
   decDiv n m
 
+def decidableForallInRegRange (n : Nat) :
+    Decidable (∀ k, 2 ≤ k ∧ k < n → k ∤ n) :=
+  decidableForallInGenRange (. ∤ n) 2 n
+
+instance : Decidable (NatPrime n) := by
+  unfold NatPrime
+  have := decidableForallInRegRange
+  apply instDecidableAnd
+
 theorem mod_idemp (d_pos : 0 < d) :
     (n % d) % d = n % d :=
   Nat.mod_eq_of_lt <| Nat.mod_lt n d_pos
@@ -368,151 +421,49 @@ theorem reg_of_proper_div (reg_d : Reg d) (p_div_d : p ∣ d) (d_ne_p : d ≠ p)
       | 0 => qz rfl |>.elim
       | 1 => qo rfl |>.elim
 
-def PrimeTo (n q : Nat) : Prop :=
-  if q ≥ 2 then
-    (q ∤ n) ∧ (PrimeTo n (q-1))
-  else
-    True
-notation n" ⊹ "m => PrimeTo n m
-/- Note : The name PrimeTo is justified by the fact that
-   PrimeTo n q implies (n, q) = 1. More descriptive, but verbose,
-   would be PrimeUpTo. -/
+def MinDivisor' (n d : Nat) : Prop :=
+  Reg d ∧ (d ∣ n) ∧ ∀ k, 2 ≤ k ∧ k < d → k ∤ n
 
-def decPrimeTo (n q : Nat) : Decidable (n ⊹ q) :=
-  if reg_q : q ≥ 2 then
-    if ndiv_n : q ∤ n then
-      match decPrimeTo n (q - 1) with
-      | isTrue proof  => isTrue  <| by
-        unfold PrimeTo; simp only [proof, if_pos, ndiv_n, reg_q]
-      | isFalse proof => isFalse <| by
-        unfold PrimeTo; simp only [proof, if_pos, ndiv_n, reg_q]
-    else
-      isFalse <| by unfold PrimeTo
-                    simp only [if_pos, ndiv_n, reg_q]
-                    intro ⟨_,_⟩; assumption
-  else
-    isTrue <| by unfold PrimeTo; simp only [if_neg, reg_q]
+def AuxMinDiv (n d : Nat) : Decidable (∀ k, 2 ≤ k ∧ k < d → k ∤ n) :=
+  decidableForallInGenRange (. ∤ n) 2 d
 
-instance : Decidable (PrimeTo n q) :=
-  decPrimeTo n q
-
-theorem not_dvd_of_prime_to
-    (reg_k : Reg k) (k_le_m : k ≤ m) (ndiv : n ⊹ m) : k ∤ n :=
-  let ⟨ndiv_top, ndiv_rest⟩ : (m ∤ n) ∧ (n ⊹ (m - 1)) := by
-    unfold PrimeTo at ndiv
-    simp only [reg_monotone reg_k k_le_m, if_pos] at ndiv
-    assumption
-  if h : k = m then
-    h ▸ ndiv_top
-  else
-    have k_lt_m := Nat.lt_of_le_of_ne k_le_m h
-    have : (m - 1) + 1 = m :=
-      Nat.succ_pred <| nz_of_pos <| pos_of_reg <| reg_monotone reg_k k_le_m 
-    have : k ≤ m - 1 :=
-      Nat.le_of_lt_succ <| this ▸ k_lt_m
-    not_dvd_of_prime_to reg_k this ndiv_rest
-
-theorem prime_to_monotone
-    (reg_p : Reg p) (reg_q : Reg q) (n_ndiv_q : n ⊹ q) (p_div_n : p ∣ n) :
-    p ⊹ q := by
-  unfold PrimeTo at *
-  simp only [if_pos, reg_p, reg_q]
-  simp only [if_pos, reg_p, reg_q] at n_ndiv_q
-  let ⟨not_q_div_n, n_ndiv_pred_q⟩ := n_ndiv_q
-  have : q ∤ p := (dvd_trans . p_div_n |> not_q_div_n)
-  exact
-    if reg_pred_q : Reg (q - 1) then
-      ⟨this,
-        prime_to_monotone reg_p reg_pred_q n_ndiv_pred_q p_div_n⟩
-    else
-      have one_ge : 1 ≥ q - 1 := Nat.le_of_lt_succ <| Nat.gt_of_not_le reg_pred_q
-      have one_le : 1 ≤ q - 1 := pred_ge_one_of_reg reg_q
-      have q_eq_2 : q - 1 = 1 := eq_of_sandwich one_ge one_le 
-      ⟨this, by unfold PrimeTo; simp only [q_eq_2, if_neg]⟩
-
-theorem construct_prime_to
-    (reg_m : Reg m) (reg_n : Reg n) (m_le_n : m ≤ n)
-    (p : ∀ k, Reg k ∧ k < m → (k ∤ n)) : PrimeTo n (m - 1) :=
-  match m with
-  | 2 => by
-    unfold PrimeTo
-    rw [if_neg]
-    repeat decide
-  | k + 3 => by
-    have reg_small : Reg (k + 2) := Nat.le_add_left 2 k
-    have lt_pred : k + 2 < k + 3 := pred_lt_of_reg reg_m
-    have p₁ : ∀ z, Reg z ∧ z < k + 2 → (z ∤ n) :=
-      fun z ⟨reg_z, small_z⟩ =>
-      p z ⟨reg_z, Nat.lt_trans small_z lt_pred⟩
-    unfold PrimeTo
-    rw [if_pos, Nat.add_sub_assoc, Nat.add_sub_assoc]
-    have div_n : (k + 2) ∤ n := p (k + 2) ⟨reg_small, lt_pred⟩
-    have leq_n : (k + 2) ≤ n := Nat.le_trans (Nat.le_succ _) m_le_n
-    apply And.intro
-    .  exact div_n
-    .  exact construct_prime_to reg_small reg_n leq_n p₁
-    repeat decide
-    assumption
-
-def MinDivisor (n d : Nat) : Prop :=
- Reg d ∧ (d ∣ n) ∧ (n ⊹ (d - 1))
-
-def decMinDivisor (n d : Nat) : Decidable (MinDivisor n d) := by
-  unfold MinDivisor
+def decMinDivisor' (n d : Nat) : Decidable (MinDivisor' n d) := by
+  unfold MinDivisor'
+  have := AuxMinDiv n d
   exact instDecidableAnd
 
-instance : Decidable (MinDivisor n d) :=
-  decMinDivisor n d
+instance : Decidable (MinDivisor' n d) :=
+  decMinDivisor' n d
 
-def DivisorAccumulator
-    (d : Nat) (reg_d : Reg d) (acc : n ⊹ (d - 1)) (n_geq_d : d ≤ n) :
-    ∃ d, MinDivisor n d :=
-  if h : d < n then
-    if dvd_d : d ∣ n then
-      ⟨d, ⟨reg_d, dvd_d, acc⟩⟩
-    else
-      have reg_succ_d : Reg (d + 1) :=
-        reg_monotone reg_d (Nat.le_succ d)
-      have acc_succ : n ⊹ d := by
-        unfold PrimeTo
-        simp only [if_pos, reg_d]
-        exact ⟨dvd_d, acc⟩
-      DivisorAccumulator (d + 1) reg_succ_d acc_succ h
-  else
-    have d_eq_n : d = n :=
-      Nat.eq_or_lt_of_le n_geq_d >r (h . |>.elim)
-    ⟨n, ⟨d_eq_n ▸ reg_d, dvd_self, d_eq_n ▸ acc⟩⟩
-termination_by _ => n - d
+abbrev AuxDivPred (n d : Nat) := Reg d ∧ (d ∣ n)
 
-def hasMinDivisor (n : Nat) (reg_n : Reg n) :
-    ∃ d : Nat, MinDivisor n d :=
-  DivisorAccumulator 2
-    (by decide)
-    (by unfold PrimeTo; simp only [if_neg, *])
-    (by assumption)
+instance : Decidable (AuxDivPred n k) :=
+  instDecidableAnd
 
-def RecPrime (p : Nat) : Prop :=
-  Reg p ∧ p ⊹ (p - 1)
+theorem neg_AuxDivPred : ¬ AuxDivPred n d ↔ (¬ Reg d) ∨ d ∤ n :=
+  Decidable.not_and_iff_or_not (Reg d) (d ∣ n)
 
-instance : Decidable (RecPrime p) := by
-  unfold RecPrime
-  exact instDecidableAnd
+def hasMinDivisor' (n : Nat) (reg_n : Reg n) :
+    ∃ d : Nat, MinDivisor' n d :=
+  let self_sat : AuxDivPred n n := ⟨reg_n, dvd_self⟩
+  have minimal_sat := minimal_satisfies self_sat
+  let ⟨d, ⟨reg_d, d_div_n⟩, no_smaller⟩ := minimal_sat
+  ⟨d, ⟨reg_d, d_div_n, 
+    fun k ⟨reg_k, k_lt_d⟩ =>
+    (no_smaller k k_lt_d |> neg_AuxDivPred.mp) >l
+      (. reg_k |>.elim) ⟩⟩
 
-theorem first_rec_prime : RecPrime 2 := by
-  decide
-
-theorem RecPrime_of_MinDivisor : MinDivisor n p → RecPrime p :=
+theorem NatPrime_of_MinDivisor' : MinDivisor' n p → NatPrime p :=
   fun ⟨reg_p, p_div_n, p_ndiv_rest⟩ =>
-    if h : p = 2 then
-      by simp only [first_rec_prime, h]
-    else
-      have reg_pred : 2 ≤ (p - 1) := reg_pred_of_reg_ne_two reg_p h
-      ⟨reg_p, prime_to_monotone reg_p reg_pred p_ndiv_rest p_div_n⟩
+  ⟨reg_p, fun k ⟨reg_k, k_lt_p⟩ div =>
+    have k_div_n : k ∣ n := dvd_trans div p_div_n
+    p_ndiv_rest k ⟨reg_k, k_lt_p⟩ k_div_n⟩
 
-theorem rec_prime_divisor :
-    ∀ n, Reg n → ∃ p, RecPrime p ∧ (p ∣ n) := fun n reg_n =>
-  have ⟨d, minDiv⟩ := hasMinDivisor n reg_n
-  ⟨d, ⟨RecPrime_of_MinDivisor minDiv, minDiv.2.1⟩⟩
+theorem nat_prime_divisor :
+    ∀ n, Reg n → ∃ p, NatPrime p ∧ (p ∣ n) :=
+  fun n reg_n =>
+  have ⟨d, minDiv⟩ := hasMinDivisor' n reg_n
+  ⟨d, NatPrime_of_MinDivisor' minDiv, minDiv.2.1⟩
 
 theorem nat_of_prime : Prime n → NatPrime n :=
   fun prime_n =>
@@ -527,25 +478,6 @@ theorem nat_of_prime : Prime n → NatPrime n :=
         dvd_of_eq this |> red_prime d₁ d₂ ⟨small₁, small₂⟩ |>.elim
           (fun div₁ => not_lt_of_dvd_pos pos_d₁ div₁ small₁)
           (fun div₂ => not_lt_of_dvd_pos pos_d₂ div₂ small₂)⟩
-
-theorem nat_of_rec : RecPrime n → NatPrime n :=
-  fun ⟨reg_n, ndiv_n⟩ =>
-  ⟨reg_n,
-    fun _ ⟨reg_m, small_m⟩ =>
-    not_dvd_of_prime_to reg_m
-      (Nat.succ_pred (nz_of_reg reg_n) ▸ small_m |> Nat.le_of_lt_succ)
-      ndiv_n⟩
-
-theorem rec_of_nat : NatPrime n → RecPrime n :=
-  fun ⟨reg_n, all_ndiv_n⟩ =>
-  ⟨reg_n, construct_prime_to reg_n reg_n (Nat.le_refl n) all_ndiv_n⟩
-
-instance : Decidable (NatPrime n) :=
-  if rec_prime : RecPrime n then
-    isTrue  <| nat_of_rec rec_prime
-  else
-    isFalse <| fun nat_prime =>
-      rec_of_nat nat_prime |> rec_prime
 
 theorem first_nat_prime : NatPrime 2 := by decide
 
@@ -714,12 +646,12 @@ theorem reduced_predicate : NatPrime n →
         have m_lt_n : m < n := calc
           m ≤ q := Nat.le_of_mul_le_mul_left (Nat.le_of_lt this) (pos_of_reg reg_n)
           _ < n := q_lt_n
-        let ⟨p₀, rec_prime_po, po_div_m⟩ := rec_prime_divisor m reg_m
+        let ⟨p₀, nat_prime_po, po_div_m⟩ := nat_prime_divisor m reg_m
         have : p₀ < n := calc
           p₀ ≤ m := le_of_dvd_pos (pos_of_reg reg_m) po_div_m
           _  < n := m_lt_n
         have pq_eq_nm : p * q = n * m := Nat.mul_comm n m ▸ pq_eq_mn
-        have prime_o : Prime p₀ := prime_of_nat <| nat_of_rec rec_prime_po
+        have prime_o : Prime p₀ := prime_of_nat <| nat_prime_po
         have : (p₀ ∣ p) ∨ (p₀ ∣ q) := prime_o.2 p q <|
           dvd_trans po_div_m ⟨n, pq_eq_nm⟩
         this.elim (
@@ -823,18 +755,18 @@ theorem greater_prime_of_any_nat :
   let Q := factorial n + 1
   have reg_q : Reg Q := 
     Nat.add_le_add (factorial_positive n) (Nat.le_refl 1)
-  let ⟨p, rec_prime_p, p_div_q⟩ := rec_prime_divisor Q reg_q
+  let ⟨p, nat_prime_p, p_div_q⟩ := nat_prime_divisor Q reg_q
   have prime_p : Prime p :=
-    prime_of_nat <| nat_of_rec rec_prime_p
+    prime_of_nat <| nat_prime_p
   if contra : p ≤ n then
     have p_div_fact : p ∣ factorial n :=
-      dvd_factorial (pos_of_reg rec_prime_p.1) contra 
+      dvd_factorial (pos_of_reg nat_prime_p.1) contra 
     have dvd_diff : p ∣ 1 := calc
       p ∣ (factorial n + 1) - factorial n := dvd_diff_of_both ⟨p_div_q, p_div_fact⟩
       _ = (1 + factorial n) - factorial n := by rw [Nat.add_comm]
       _ = 1 := by simp only [Nat.add_sub_assoc, Nat.le_refl, Nat.sub_self] 
     have : p = 1 := one_of_dvd_one dvd_diff
-    have := this ▸ rec_prime_p.1
+    have := this ▸ nat_prime_p.1
     by contradiction
   else
     ⟨p, prime_p, Nat.gt_of_not_le contra⟩
