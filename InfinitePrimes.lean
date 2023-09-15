@@ -271,14 +271,6 @@ theorem dvd_of_eq : a = r → a ∣ r :=
 theorem dvd_self : n ∣ n :=
   ⟨1, by rw [Nat.one_mul]⟩
 
-theorem dvd_antisymm : (a ∣ b) ∧ (b ∣ a) → a = b :=
-  fun ⟨ab, ba⟩ =>
-  le_or_zero_of_dvd a b ab |>.elim
-    (fun bz => by rw [bz, zero_of_dvd_by_zero a (bz ▸ ba)])
-    (fun bl => le_or_zero_of_dvd b a ba |>.elim
-      fun az => by rw [zero_of_dvd_by_zero b (az ▸ ab), az]
-      fun al => Nat.le_antisymm bl al)
-
 theorem zmod_of_dvd (n m : Nat) : (n ∣ m) → m % n = 0 :=
   if m_zero : m = 0 then
     fun _ => by rw [m_zero, Nat.zero_mod]
@@ -345,10 +337,6 @@ instance : Decidable (NatPrime n) := by
   have := decidableForallInRegRange
   apply instDecidableAnd
 
-theorem mod_idemp (d_pos : 0 < d) :
-    (n % d) % d = n % d :=
-  Nat.mod_eq_of_lt <| Nat.mod_lt n d_pos
-
 theorem prod_mod_eq_mod_prod_mod (d_pos : 0 < d) :
     (n * m) % d = (n % d)*(m % d) % d :=
   if nz : n = 0 then
@@ -370,18 +358,6 @@ theorem prod_mod_eq_mod_prod_mod (d_pos : 0 < d) :
       (n * m) % d = (f * d + rn * rm) % d := by rw [exp, Nat.mul_comm]
       _           = rn * rm % d           := by rw [mod_cancel_prod]
       _           = (n % d) * (m % d) % d := by rw [mod_m_r, mod_n_r]
-
-theorem not_dvd_prod_of_prime (prime_n : Prime n) :
-    ∀ p q, 1 ≤ p ∧ p < n ∧ 1 ≤ q ∧ q < n → (n ∤ (p * q)) :=
-  fun p q ⟨pos_p, p_lt_n, pos_q, q_lt_n⟩ =>
-    let contra_divs :=
-      fun x dx pos_x x_lt_n => 
-      le_or_zero_of_dvd n x dx |>.elim
-        (Nat.not_eq_zero_of_lt pos_x .)
-        (Nat.not_le_of_gt x_lt_n . |>.elim)
-    (prime_n.2 p q . |>.elim
-      (contra_divs p . pos_p p_lt_n)
-      (contra_divs q . pos_q q_lt_n))
 
 theorem prime_of_not_dvd_prod (reg_n : Reg n)
     (not_dvd_prod :
@@ -429,38 +405,21 @@ theorem pos_of_div : 0 < d ∧ d ≤ n → 1 ≤ n / d :=
   calc 1 ≤ (n - d) / d + 1 := Nat.succ_le_succ <| Nat.zero_le _
        _ = n / d           := this.symm
 
-theorem reg_of_proper_div
-    (reg_d : Reg d) (p_div_d : p ∣ d) (d_ne_p : d ≠ p) :
-    Reg (d / p) :=
-  have factor_d := factors_of_dvd p_div_d 
-  let q := d / p
-  if qz : q = 0 then
-    have : d = 0 := Nat.mul_zero p ▸ qz ▸ factor_d
-    nz_of_reg reg_d this |>.elim
-  else if qo : q = 1 then
-    have : d = p := Nat.mul_one p ▸ qo ▸ factor_d
-    d_ne_p this |>.elim
-  else
-    show Reg (d / p) from Nat.lt_or_ge q 2 >l
-      fun  _ => match q with
-      | 0 => qz rfl |>.elim
-      | 1 => qo rfl |>.elim
-
-def MinDivisor' (n d : Nat) : Prop :=
+def MinDivisor (n d : Nat) : Prop :=
   Reg d ∧ (d ∣ n) ∧ ∀ k, k ⋖ d → k ∤ n
 
 def AuxMinDiv (n d : Nat) :
     Decidable (∀ k, k ⋖ d → k ∤ n) :=
   decidableForallInRange (. ∤ n) 2 d
 
-def decMinDivisor' (n d : Nat) :
-    Decidable (MinDivisor' n d) := by
-  unfold MinDivisor'
+def decMinDivisor (n d : Nat) :
+    Decidable (MinDivisor n d) := by
+  unfold MinDivisor
   have := AuxMinDiv n d
   exact instDecidableAnd
 
-instance : Decidable (MinDivisor' n d) :=
-  decMinDivisor' n d
+instance : Decidable (MinDivisor n d) :=
+  decMinDivisor n d
 
 abbrev AuxDivPred (n d : Nat) :=
   Reg d ∧ (d ∣ n)
@@ -471,8 +430,8 @@ instance : Decidable (AuxDivPred n k) :=
 theorem neg_AuxDivPred : ¬ AuxDivPred n d ↔ ¬ Reg d ∨ d ∤ n :=
   Decidable.not_and_iff_or_not (Reg d) (d ∣ n)
 
-def hasMinDivisor' (n : Nat) (reg_n : Reg n) :
-    ∃ d : Nat, MinDivisor' n d :=
+def hasMinDivisor (n : Nat) (reg_n : Reg n) :
+    ∃ d : Nat, MinDivisor n d :=
   let self_sat : AuxDivPred n n := ⟨reg_n, dvd_self⟩
   have minimal_sat := minimal_satisfies self_sat
   let ⟨d, ⟨reg_d, d_div_n⟩, no_smaller⟩ := minimal_sat
@@ -481,7 +440,7 @@ def hasMinDivisor' (n : Nat) (reg_n : Reg n) :
     (no_smaller k k_lt_d |> neg_AuxDivPred.mp) >l
       (. reg_k |>.elim) ⟩⟩
 
-theorem NatPrime_of_MinDivisor' : MinDivisor' n p → NatPrime p :=
+theorem NatPrime_of_MinDivisor : MinDivisor n p → NatPrime p :=
   fun ⟨reg_p, p_div_n, p_ndiv_rest⟩ =>
   ⟨reg_p, fun k ⟨reg_k, k_lt_p⟩ div =>
     have k_div_n : k ∣ n := dvd_trans div p_div_n
@@ -490,8 +449,8 @@ theorem NatPrime_of_MinDivisor' : MinDivisor' n p → NatPrime p :=
 theorem nat_prime_divisor :
     ∀ n, Reg n → ∃ p, NatPrime p ∧ (p ∣ n) :=
   fun n reg_n =>
-  have ⟨d, minDiv⟩ := hasMinDivisor' n reg_n
-  ⟨d, NatPrime_of_MinDivisor' minDiv, minDiv.2.1⟩
+  have ⟨d, minDiv⟩ := hasMinDivisor n reg_n
+  ⟨d, NatPrime_of_MinDivisor minDiv, minDiv.2.1⟩
 
 theorem nat_of_prime : Prime n → NatPrime n :=
   fun prime_n =>
