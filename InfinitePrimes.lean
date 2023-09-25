@@ -279,7 +279,7 @@ theorem euclidean_division (d_pos : 0 < d) (n_pos : 0 < n) :
     (by rw [euclidean_data d_pos n_pos]; apply And.intro <;> rfl) ⟩
 
 theorem zero_or_le_of_dvd (k K : Nat) :
-    (k ∣ K) → K = 0 ∨ k ≤ K :=
+    (k ∣ K) → (K = 0) ∨ (k ≤ K) :=
   fun ⟨m, kdiv⟩ =>
     if mz : m = 0 then
       .inl <| by rw [kdiv, mz, Nat.zero_mul]
@@ -290,7 +290,7 @@ theorem zero_or_le_of_dvd (k K : Nat) :
         _ = k     := by rw [Nat.mul_comm, Nat.mul_one]
 
 theorem not_lt_of_dvd_pos (k_pos : 0 < K) :
-    (k ∣ K) → ¬ K < k :=
+    (k ∣ K) → (¬ K < k) :=
   fun divs contra =>
     (zero_or_le_of_dvd k K divs |>.elim) ⇐
     · fun kzr => Nat.ne_of_lt k_pos kzr.symm
@@ -318,13 +318,11 @@ theorem one_of_dvd_one (a_div_one : a ∣ 1) : a = 1 :=
 theorem dvd_zero (a : Nat) : a ∣ 0 :=
   ⟨0, Nat.zero_mul a |>.symm⟩
 
-theorem zero_of_dvd_by_zero :
-    ∀ (a : Nat), (0 ∣ a) → a = 0 :=
-  fun _ ⟨k, h⟩ =>
+theorem zero_of_dvd_by_zero : (0 ∣ a) → (a = 0) :=
+  fun ⟨k, h⟩ =>
     Nat.mul_zero k ▸ h
 
-theorem dvd_transAux :
-    (a ∣ b) ∧ (b ∣ c) → (a ∣ c) :=
+theorem dvd_transAux : (a ∣ b) ∧ (b ∣ c) → (a ∣ c) :=
   fun ⟨⟨m, adb⟩, ⟨n, bdc⟩⟩ =>
     ⟨n * m, by rw [bdc, adb, Nat.mul_assoc]⟩
 
@@ -339,7 +337,7 @@ theorem dvd_diff_of_both : (a ∣ b) ∧ (a ∣ c) → (a ∣ b - c) :=
     ⟨m - n, by rw [adb, bdc, Nat.mul_sub_right_distrib]⟩
 
 theorem dvd_monotone (r : Nat) (p_dvd_q : p ∣ q) :
-    p ∣ q * r :=
+    p ∣ (q * r) :=
   have q_dvd_qr : q ∣ q * r :=
     ⟨r, by rw [Nat.mul_comm]⟩
   dvd_trans p_dvd_q q_dvd_qr
@@ -354,7 +352,7 @@ theorem zmod_of_dvd (n m : Nat) : (n ∣ m) → m % n = 0 :=
   if m_zero : m = 0 then
     fun _ => by rw [m_zero, Nat.zero_mod]
   else if n_zero : n = 0 then
-    ( n_zero ▸ . |> zero_of_dvd_by_zero m |> m_zero |>.elim )
+    ( n_zero ▸ . |> zero_of_dvd_by_zero |> m_zero |>.elim )
   else if big_n : m < n then
     ( zero_or_le_of_dvd n m . |>.elim
         ( m_zero . |>.elim )
@@ -419,13 +417,10 @@ instance : Decidable (divides n m) :=
   decDiv n m
 
 def decidableForallInRegRange (n : Nat) :
-    Decidable (∀ k, k ⋖ n → k ∤ n) :=
-  decidableForallInRange ⇐
-  · (. ∤ n)
-  · 2
-  · n
+    Decidable <| ∀ k, (k ⋖ n) → (k ∤ n) :=
+  decidableForallInRange (. ∤ n) 2 n
 
-instance : Decidable (NatPrime n) := by
+instance : Decidable <| NatPrime n := by
   unfold NatPrime
   have := decidableForallInRegRange
   apply instDecidableAnd
@@ -461,7 +456,7 @@ theorem prod_mod_eq_mod_prod_mod (d_pos : 0 < d) :
       _           = (n % d) * (m % d) % d := by rw [mod_m_r, mod_n_r]
 
 theorem prime_of_not_dvd_prod (reg_n : Reg n)
-    (not_dvd_prod : ∀ p q, (1 ≤ p) ∧ (p < n) ∧ (1 ≤ q) ∧ (q < n) → (n ∤ (p * q))) :
+    (not_dvd_prod : ∀ p q, (1 ≤ p) ∧ (p < n) ∧ (1 ≤ q) ∧ (q < n) → (n ∤ p * q)) :
     Prime n :=
   And.intro ⇐
   · reg_n
@@ -491,10 +486,10 @@ theorem prime_of_not_dvd_prod (reg_n : Reg n)
         Nat.eq_zero_or_pos p ↘
           (pos_p . |>.elim)
 
-theorem reduced_primality : Prime n →
-    Reg n ∧ ∀ p q, p < n ∧ q < n → (n ∣ (p * q)) → (n ∣ p) ∨ (n ∣ q) :=
-  fun ⟨reg_n, div⟩ =>
-    ⟨reg_n, fun p q _ => div p q⟩
+theorem reduced_primality (prime_n : Prime n) :
+    (Reg n) ∧ ∀ p q, (p < n) ∧ (q < n) → (n ∣ p * q) → (n ∣ p) ∨ (n ∣ q) :=
+  let ⟨reg_n, div⟩ := prime_n
+  ⟨reg_n, fun p q _ => div p q⟩
 
 def factors_of_dvd (dn : d ∣ n) : n = d * (n / d) := calc
   n = d * (n / d) + n % d := Nat.div_add_mod n d |>.symm
@@ -570,8 +565,7 @@ theorem NatPrime_of_MinDivisor : MinDivisor n p → NatPrime p :=
           dvd_trans div p_div_n
         p_ndiv_rest k ⟨reg_k, k_lt_p⟩ k_div_n
 
-theorem nat_prime_divisor :
-    ∀ n, Reg n → ∃ p, NatPrime p ∧ (p ∣ n) :=
+theorem nat_prime_divisor : ∀ n, (Reg n) → ∃ p, (NatPrime p) ∧ (p ∣ n) :=
   fun n reg_n =>
     have ⟨d, minDiv⟩ :=
       hasMinDivisor n reg_n
@@ -675,12 +669,12 @@ termination_by
 def divisionEq (n p q c : Nat) :=
   p * q = c * n
 
-instance : Decidable (divisionEq n p q c) := by
+instance : Decidable <| divisionEq n p q c := by
   unfold divisionEq
   apply Nat.decEq
 
 def decidable_divisionEq (n q c : Nat) :
-    Decidable (∃ p, p ⋖ n ∧ divisionEq n p q c) :=
+    Decidable <| ∃ p, (p ⋖ n) ∧ (divisionEq n p q c) :=
   decidable_exists ⇐
   · fun n x => divisionEq n x q c
   · n
@@ -752,8 +746,7 @@ theorem reduced_predicate : NatPrime n →
       fun n_div_pq =>
         have := Nat.one_mul q ▸ po ▸ n_div_pq
         have := le_of_dvd_pos pos_q <| this
-        Nat.lt_irrefl q <|
-        calc
+        Nat.lt_irrefl q <| calc
           q < n := q_lt_n
           _ ≤ q := this
     else if qo : q = 1 then
@@ -792,8 +785,8 @@ theorem reduced_predicate : NatPrime n →
             n * m = m * n := Nat.mul_comm n m
             _     = p * q := pq_eq_mn.symm
             _     < n * q := Nat.mul_lt_mul_of_pos_right ⇐
-                              · p_lt_n
-                              · pos_of_reg reg_q
+                             · p_lt_n
+                             · pos_of_reg reg_q
           have m_lt_n : m < n := calc
             m ≤ q := Nat.le_of_mul_le_mul_left ⇐
                       · Nat.le_of_lt this
@@ -834,9 +827,9 @@ theorem reduced_predicate : NatPrime n →
                     · prime_o.1
                   · p_lt_n
                 have contra_minimal : @Factors n (m / p₀) :=
-                  ⟨ p / p₀, q,
-                    reg_po, po_lt_n,
-                    reg_q, q_lt_n,
+                  ⟨ p / p₀, q                         ,
+                    reg_po, po_lt_n                   ,
+                    reg_q, q_lt_n                     ,
                     Nat.mul_comm (m / p₀) n ▸ descent ⟩
                 False.elim <|
                   no_smaller ⇐
@@ -865,59 +858,59 @@ theorem reduced_predicate : NatPrime n →
                         · pos_of_reg reg_m
                         · po_div_m
           · fun po_div_q =>
-            have descent : (q / p₀) * p = n * (m / p₀) :=
-              have : q * p = m * n :=
-                Nat.mul_comm p q ▸ pq_eq_mn
-              have aux_descent :=
-                descend_factors ⇐
-                · pos_of_reg prime_o.1
-                · po_div_q
-                · po_div_m
-                · this
-              Nat.mul_comm n (m / p₀) ▸ aux_descent
-            have po_lt_m : m / p₀ < m :=
-              Nat.div_lt_self ⇐
-              · pos_of_reg reg_m
-              · prime_o.1
-            if reg_po : Reg (q / p₀) then
-              have po_lt_n : q / p₀ < n :=
-                Nat.lt_trans ⇐
-                · Nat.div_lt_self ⇐
-                  · pos_of_reg reg_q
-                  · prime_o.1
-                · q_lt_n
-              have contra_minimal : @Factors n (m / p₀) :=
-                ⟨ q / p₀, p,
-                  reg_po, po_lt_n,
-                  reg_p, p_lt_n,
-                  Nat.mul_comm (m / p₀) n ▸ descent ⟩
-              False.elim <|
-                no_smaller ⇐
-                · (m / p₀)
-                · po_lt_m
-                · contra_minimal
-            else
-              Or.elim ⇐
-              · zero_one_of_not_reg reg_po
-              · fun po_zero =>
-                  (pos_of_div ⇐
+              have descent : (q / p₀) * p = n * (m / p₀) :=
+                have : q * p = m * n :=
+                  Nat.mul_comm p q ▸ pq_eq_mn
+                have aux_descent :=
+                  descend_factors ⇐
                   · pos_of_reg prime_o.1
-                  · le_of_dvd_pos ⇐
+                  · po_div_q
+                  · po_div_m
+                  · this
+                Nat.mul_comm n (m / p₀) ▸ aux_descent
+              have po_lt_m : m / p₀ < m :=
+                Nat.div_lt_self ⇐
+                · pos_of_reg reg_m
+                · prime_o.1
+              if reg_po : Reg (q / p₀) then
+                have po_lt_n : q / p₀ < n :=
+                  Nat.lt_trans ⇐
+                  · Nat.div_lt_self ⇐
                     · pos_of_reg reg_q
-                    · po_div_q)
-                  |> Nat.not_eq_zero_of_lt <| po_zero
-              · fun po_one =>
-                  have p_factor : p = (m / p₀) * n :=
-                    Nat.mul_comm (m / p₀) n ▸ Nat.one_mul p ▸
-                    po_one ▸ descent
-                  not_factor ⇐
-                  · p_factor
-                  · p_lt_n
-                  · pos_of_div ⇐
+                    · prime_o.1
+                  · q_lt_n
+                have contra_minimal : @Factors n (m / p₀) :=
+                  ⟨ q / p₀, p                         ,
+                    reg_po, po_lt_n                   ,
+                    reg_p, p_lt_n                     ,
+                    Nat.mul_comm (m / p₀) n ▸ descent ⟩
+                False.elim <|
+                  no_smaller ⇐
+                  · (m / p₀)
+                  · po_lt_m
+                  · contra_minimal
+              else
+                Or.elim ⇐
+                · zero_one_of_not_reg reg_po
+                · fun po_zero =>
+                    (pos_of_div ⇐
                     · pos_of_reg prime_o.1
                     · le_of_dvd_pos ⇐
-                      · pos_of_reg reg_m
-                      · po_div_m
+                      · pos_of_reg reg_q
+                      · po_div_q)
+                    |> Nat.not_eq_zero_of_lt <| po_zero
+                · fun po_one =>
+                    have p_factor : p = (m / p₀) * n :=
+                      Nat.mul_comm (m / p₀) n ▸ Nat.one_mul p ▸
+                      po_one ▸ descent
+                    not_factor ⇐
+                    · p_factor
+                    · p_lt_n
+                    · pos_of_div ⇐
+                      · pos_of_reg prime_o.1
+                      · le_of_dvd_pos ⇐
+                        · pos_of_reg reg_m
+                        · po_div_m
 
 theorem prime_of_nat : NatPrime n → Prime n :=
   fun nat_prime_n =>
@@ -929,11 +922,9 @@ end
 
 instance : Decidable <| Prime n :=
   if h : NatPrime n then
-    isTrue  <|
-    prime_of_nat h
+    isTrue  <| prime_of_nat h
   else
-    isFalse <|
-    (h <| nat_of_prime .)
+    isFalse <| (h <| nat_of_prime .)
 
 theorem first_prime : Prime 2 := by
   decide
@@ -942,11 +933,10 @@ def fact : Nat → Nat
   | 0     => 1
   | k + 1 => (k + 1) * fact k
 
-theorem dvd_fact (pos_k : 0 < k) (ineq : k ≤ n) :
-    k ∣ fact n :=
-  have : 0 < n :=
-    calc 0 < k := pos_k
-         _ ≤ n := ineq
+theorem dvd_fact (pos_k : 0 < k) (ineq : k ≤ n) : k ∣ (fact n) :=
+  have : 0 < n := calc
+    0 < k := pos_k
+    _ ≤ n := ineq
   match n with
   | r + 1 =>
     if h : k = r + 1 then by
@@ -969,32 +959,32 @@ theorem fact_positive : ∀ n, fact n > 0
     · fact_positive k
 
 theorem unbounded_primes :
-    ∀ n, ∃ p, Prime p ∧ p > n :=
+    ∀ n, ∃ p, (Prime p) ∧ (p > n) :=
   fun n =>
-  let Q := (fact n) + 1
-  have reg_q : Reg Q :=
-    Nat.add_le_add ⇐
-    · fact_positive n
-    · Nat.le_refl 1
-  let ⟨p, nat_prime_p, p_div_q⟩ :=
-    nat_prime_divisor Q reg_q
-  have prime_p : Prime p :=
-    prime_of_nat nat_prime_p
-  if contra : p ≤ n then
-    have p_div_fact : p ∣ (fact n) :=
-      dvd_fact ⇐
-      · pos_of_reg nat_prime_p.1
-      · contra
-    have dvd_diff : p ∣ 1 := calc
-      p ∣ (fact n + 1) - fact n := dvd_diff_of_both ⟨p_div_q, p_div_fact⟩
-      _ = (1 + fact n) - fact n := by rw [Nat.add_comm]
-      _ = 1                     := by simp only [ Nat.add_sub_assoc ,
-                                                  Nat.le_refl       ,
-                                                  Nat.sub_self      ]
-    have : p = 1 :=
-      one_of_dvd_one dvd_diff
-    have := this ▸ nat_prime_p.1
-    by contradiction
-  else
-    ⟨p, prime_p, Nat.gt_of_not_le contra⟩
+    let Q := (fact n) + 1
+    have reg_q : Reg Q :=
+      Nat.add_le_add ⇐
+      · fact_positive n
+      · Nat.le_refl 1
+    let ⟨p, nat_prime_p, p_div_q⟩ :=
+      nat_prime_divisor Q reg_q
+    have prime_p : Prime p :=
+      prime_of_nat nat_prime_p
+    if contra : p ≤ n then
+      have p_div_fact : p ∣ (fact n) :=
+        dvd_fact ⇐
+        · pos_of_reg nat_prime_p.1
+        · contra
+      have dvd_diff : p ∣ 1 := calc
+        p ∣ (fact n + 1) - fact n := dvd_diff_of_both ⟨p_div_q, p_div_fact⟩
+        _ = (1 + fact n) - fact n := by rw [Nat.add_comm]
+        _ = 1                     := by simp only [ Nat.add_sub_assoc ,
+                                                    Nat.le_refl       ,
+                                                    Nat.sub_self      ]
+      have : p = 1 :=
+        one_of_dvd_one dvd_diff
+      have := this ▸ nat_prime_p.1
+      by contradiction
+    else
+      ⟨p, prime_p, Nat.gt_of_not_le contra⟩
 #print axioms unbounded_primes
